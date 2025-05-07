@@ -43,10 +43,10 @@ console.log("Supabase Key:", supabaseKey);
 const supabase = createClient(supabaseUrl, supabaseKey)
 const corsOptions = {
   origin: [
-    "https://tickets-manager-kappa.vercel.app/", // URL de Vercel
+    "https://tickets-manager-kappa.vercel.app/", // URL de Vercel 
     "http://localhost:3000", // Pour le dev local
   ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE",'OPTIONS'],
   credentials: true,
 };
 app.use(cors(corsOptions));
