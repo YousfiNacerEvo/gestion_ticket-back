@@ -1,3 +1,8 @@
+console.log("Versions des dépendances:", {
+  express: require('express/package.json').version,
+  'path-to-regexp': require('path-to-regexp/package.json').version
+});
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -53,9 +58,9 @@ const corsOptions = {
 
 // Appliquer CORS à toutes les routes
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Gérer les requêtes OPTIONS pour toutes les routes
-
+app.options('*', cors(corsOptions));
 
 // Middleware pour vérifier le token JWT
 async function authenticateToken(req, res, next) {
