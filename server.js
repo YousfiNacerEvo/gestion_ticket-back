@@ -41,8 +41,15 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 console.log("Supabase URL:", process.env.SUPABASE_URL);
 console.log("Supabase Key:", supabaseKey);
 const supabase = createClient(supabaseUrl, supabaseKey)
-
-app.use(cors());
+const corsOptions = {
+  origin: [
+    "https://tickets-manager-kappa.vercel.app/", // URL de Vercel
+    "http://localhost:3000", // Pour le dev local
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Middleware pour vérifier le token JWT
@@ -228,8 +235,37 @@ app.get('/states', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
   }
 });
-app.listen(5000, () => {
-  console.log('Server is running on http://localhost:5000');
+// Ajoute ceci dans server/server.js
+
+app.get('/tickets-stats', authenticateToken, async (req, res) => {
+  const { status, groupBy = 'day' } = req.query;
+  let { data, error } = await supabase.from('tickets').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Filtrer par statut
+  if (status) data = data.filter(t => t.status === status);
+
+  // Grouper par date
+  const groupFn = (date) => {
+    const d = new Date(date);
+    if (groupBy === 'year') return d.getFullYear();
+    if (groupBy === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    // default: day
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const stats = {};
+  data.forEach(ticket => {
+    const label = groupFn(ticket.created_at);
+    stats[label] = (stats[label] || 0) + 1;
+  });
+
+  // Format pour le frontend
+  const result = Object.entries(stats).map(([label, count]) => ({ label, count }));
+  res.json(result);
+});
+app.listen(10000, () => {
+  console.log('Server is running on http://localhost:10000');
 })
 
 
