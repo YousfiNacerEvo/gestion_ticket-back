@@ -43,14 +43,18 @@ console.log("Supabase Key:", supabaseKey);
 const supabase = createClient(supabaseUrl, supabaseKey)
 const corsOptions = {
   origin: [
-    "https://tickets-manager-kappa.vercel.app/", // URL de Vercel 
-    "http://localhost:3000", // Pour le dev local
+    "https://tickets-manager-kappa.vercel.app", // Retirer le / final
+    "http://localhost:3000",
   ],
-  methods: ["GET", "POST", "PUT", "DELETE",'OPTIONS'],
-  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
 };
-app.options('*', cors());
+
+// Appliquer CORS à toutes les routes
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Gérer les requêtes OPTIONS pour toutes les routes
+
 app.use(express.json());
 
 // Middleware pour vérifier le token JWT
@@ -58,12 +62,10 @@ async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   
-
   if (!token) return res.status(401).json({ error: 'Token manquant' });
 
   const { data: { user }, error } = await supabase.auth.getUser(token);
   
-
   if (error || !user) {
     return res.status(401).json({ error: 'Token invalide' });
   }
@@ -71,7 +73,6 @@ async function authenticateToken(req, res, next) {
   req.user = user;
   next();
 }
-
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
