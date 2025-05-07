@@ -52,10 +52,10 @@ const corsOptions = {
 };
 
 // Appliquer CORS à toutes les routes
+app.use(express.json());
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Gérer les requêtes OPTIONS pour toutes les routes
 
-app.use(express.json());
 
 // Middleware pour vérifier le token JWT
 async function authenticateToken(req, res, next) {
@@ -90,7 +90,7 @@ app.post('/login', async (req, res) => {
   }
 })
 
-app.post('/tickets', authenticateToken, async (req, res) => {
+app.post('/tickets', async (req, res) => {
   const { title, description, priority, type, status, clientFirstName, clientLastName, clientPhone, clientEmail, image, waitingClient } = req.body;
   try {
     const { data, error } = await supabase
@@ -124,7 +124,7 @@ app.post('/tickets', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/tickets', authenticateToken, async (req, res) => {
+app.get('/tickets', async (req, res) => {
   const { data, error } = await supabase.from('tickets').select('*');
   
   if (error) {
@@ -133,13 +133,13 @@ app.get('/tickets', authenticateToken, async (req, res) => {
   res.json(data);
 });
 
-app.get('/tickets/:id', authenticateToken, async (req, res) => {
+app.get('/tickets/:id', async (req, res) => {
   const { id } = req.params;
   console.log("ID du ticket:", id);
   const { data, error } = await supabase.from('tickets').select('*').eq('id', id);
   res.json(data);
 });
-app.put('/tickets/:id', authenticateToken, async (req, res) => {
+app.put('/tickets/:id', async (req, res) => {
   const { id } = req.params;
   console.log("Données du ticket à mettre à jour:", req.body);
   const { title, description, priority, type, status, clientFirstName, clientLastName, clientPhone, clientEmail, image, waitingClient } = req.body;
@@ -168,7 +168,7 @@ app.put('/tickets/:id', authenticateToken, async (req, res) => {
 });
 
 // Image upload endpoint
-app.post('/tickets/upload', authenticateToken, upload.single('image'), async (req, res) => {
+app.post('/tickets/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -197,7 +197,7 @@ app.post('/add-account', async (req, res) => {
 });
 
 
-app.get('/states', authenticateToken, async (req, res) => {
+app.get('/states', async (req, res) => {
   try {
     console.log('Début de la récupération des statistiques...');
     
@@ -239,7 +239,7 @@ app.get('/states', authenticateToken, async (req, res) => {
 });
 // Ajoute ceci dans server/server.js
 
-app.get('/tickets-stats', authenticateToken, async (req, res) => {
+app.get('/tickets-stats', async (req, res) => {
   const { status, groupBy = 'day' } = req.query;
   let { data, error } = await supabase.from('tickets').select('*');
   if (error) return res.status(500).json({ error: error.message });
