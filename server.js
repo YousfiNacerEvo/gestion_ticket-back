@@ -49,6 +49,7 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE",'OPTIONS'],
   credentials: true,
 };
+app.options('*', cors());
 app.use(cors(corsOptions));
 app.use(express.json());
 
