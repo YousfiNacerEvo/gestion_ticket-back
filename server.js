@@ -1,8 +1,3 @@
-console.log("Versions des dépendances:", {
-  express: require('express/package.json').version,
-  'path-to-regexp': require('path-to-regexp/package.json').version
-});
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -60,7 +55,6 @@ const corsOptions = {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // Middleware pour vérifier le token JWT
 async function authenticateToken(req, res, next) {
@@ -80,6 +74,7 @@ async function authenticateToken(req, res, next) {
 }
 
 app.post('/login', async (req, res) => {
+  console.log("BODY /login:", req.body); 
   const { email, password } = req.body;
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -95,8 +90,11 @@ app.post('/login', async (req, res) => {
   }
 })
 
-app.post('/tickets', async (req, res) => {
-  const { title, description, priority, type, status, clientFirstName, clientLastName, clientPhone, clientEmail, image, waitingClient } = req.body;
+app.post('/tickets', authenticateToken, async (req, res) => {
+  console.log("Données du ticket à créer:", req.body);
+  console.log("Utilisateur connecté:", req.user);
+  console.log("Donnée IDDD:", req.user.id);
+  const { title, description, priority, type, status, client, station, clientPhone, clientEmail, image, waitingClient } = req.body;
   try {
     const { data, error } = await supabase
       .from('tickets')
@@ -106,16 +104,16 @@ app.post('/tickets', async (req, res) => {
         priority,
         type,
         status,
-        client_first_name: clientFirstName,  // Conversion en snake_case
-        client_last_name: clientLastName,
+        client,
+        station,
         client_phone: clientPhone,
-        client_email: clientEmail,          // Le nom correct doit être client_email
+        client_email: clientEmail,
         image,
-        waiting_client: waitingClient,      // Snake_case ici aussi
+        waiting_client: waitingClient,
         user_id: req.user.id,
         user_email: req.user.email
       })
-      .select(); // Ajoutez .select() pour voir les données retournées
+      .select();
 
     if (error) {
       console.error('Erreur Supabase:', error);
@@ -147,7 +145,7 @@ app.get('/tickets/:id', async (req, res) => {
 app.put('/tickets/:id', async (req, res) => {
   const { id } = req.params;
   console.log("Données du ticket à mettre à jour:", req.body);
-  const { title, description, priority, type, status, clientFirstName, clientLastName, clientPhone, clientEmail, image, waitingClient } = req.body;
+  const { title, description, priority, type, status, client, station, clientPhone, clientEmail, image, waitingClient } = req.body;
   const { data, error } = await supabase
     .from('tickets')
     .update({
@@ -156,8 +154,8 @@ app.put('/tickets/:id', async (req, res) => {
       priority,
       type,
       status,
-      client_first_name: clientFirstName,
-      client_last_name: clientLastName,
+      client,
+      station,
       client_phone: clientPhone,
       client_email: clientEmail,
       image,
@@ -244,7 +242,7 @@ app.get('/states', async (req, res) => {
 });
 // Ajoute ceci dans server/server.js
 
-app.get('/tickets-stats', async (req, res) => {
+app.get('/ticketsStats', async (req, res) => {
   const { status, groupBy = 'day' } = req.query;
   let { data, error } = await supabase.from('tickets').select('*');
   if (error) return res.status(500).json({ error: error.message });
@@ -271,6 +269,117 @@ app.get('/tickets-stats', async (req, res) => {
   const result = Object.entries(stats).map(([label, count]) => ({ label, count }));
   res.json(result);
 });
+
+// Endpoint pour les tickets par station
+app.get('/stats/tickets-by-station', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('client, station');
+
+    if (error) throw error;
+
+    const stats = data.reduce((acc, ticket) => {
+      const key = ticket.client;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    console.log("Statistiques par station:", stats);
+
+    const result = Object.entries(stats).map(([station, count]) => ({
+      station,
+      count
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint pour les incidents par priorité
+app.get('/stats/incidents-by-priority', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('priority')
+      
+
+    if (error) throw error;
+
+    const stats = data.reduce((acc, ticket) => {
+      acc[ticket.priority] = (acc[ticket.priority] || 0) + 1;
+      return acc;
+    }, {});
+    console.log("Statistiques par priorité:", stats);
+    const result = Object.entries(stats).map(([priority, count]) => ({
+      priority,
+      count
+    }));
+    console.log("Statistiques par priorité:", result);
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint pour les catégories NOC Osticket
+app.get('/stats/noc-osticket-categories', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('type, station')
+      
+
+    if (error) throw error;
+
+    const stats = data.reduce((acc, ticket) => {
+      const category = `${ticket.station}_${ticket.type}`;
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {});
+
+    const result = Object.entries(stats).map(([category, count]) => ({
+      category,
+      count
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint pour les incidents par statut
+app.get('/stats/incidents-by-status', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('status')
+      
+
+    if (error) throw error;
+
+    const stats = data.reduce((acc, ticket) => {
+      acc[ticket.status] = (acc[ticket.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const result = Object.entries(stats).map(([status, count]) => ({
+      status,
+      count
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(10000, () => {
   console.log('Server is running on http://localhost:10000');
 })
