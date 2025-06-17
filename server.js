@@ -166,12 +166,23 @@ app.get('/tickets/:id', async (req, res) => {
   res.json(transformedData);
 });
 
-app.put('/tickets/:id', async (req, res) => {
+app.put('/tickets/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { title, description, priority, type, status, client, station, clientPhone, clientEmail, files, waitingClient, resolutionComment, closed_at } = req.body;
-  const { data, error } = await supabase
-    .from('tickets')
-    .update({
+  const { title, description, priority, type, status, client, station, clientPhone, clientEmail, files, waitingClient, resolutionComment } = req.body;
+
+  try {
+    // 1. Récupérer l'état actuel du ticket
+    const { data: oldTicketData, error: oldTicketError } = await supabase
+      .from('tickets')
+      .select('status, closed_at')
+      .eq('id', id)
+      .single();
+
+    if (oldTicketError || !oldTicketData) {
+      return res.status(404).json({ error: 'Ticket non trouvé ou erreur lors de la récupération de l\'ancien statut.' });
+    }
+
+    let updatePayload = {
       title,
       description,
       priority,
@@ -184,14 +195,35 @@ app.put('/tickets/:id', async (req, res) => {
       files: files ? JSON.stringify(files) : null,
       waiting_client: waitingClient,
       resolution_comment: resolutionComment,
-      closed_at
-    })
-    .eq('id', id)
-    .select();
-  if (error) {
-    return res.status(400).json({ error: error.message });
+    };
+
+    if (status === 'closed') {
+      if (oldTicketData.status !== 'closed') {
+        // Le ticket est en train d'être fermé, définir la date actuelle via la base de données
+        updatePayload.closed_at = supabase.raw('NOW()'); // Utilise la fonction SQL NOW()
+      } else {
+        // Le ticket était déjà fermé, conserver la date existante
+        updatePayload.closed_at = oldTicketData.closed_at;
+      }
+    } else {
+      // Le ticket est ouvert, en cours, ou rouvert, définir closed_at à null
+      updatePayload.closed_at = null;
+    }
+
+    const { data, error } = await supabase
+      .from('tickets')
+      .update(updatePayload)
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('Erreur inattendue lors de la mise à jour du ticket:', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du ticket' });
   }
-  res.json(data);
 });
 
 // Route pour l'upload de fichiers
