@@ -469,10 +469,10 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       html: message
         ? `<p>${message}</p>`
         : `
-          <h2>Un nouveau ticket a été créé</h2>
-          <p>Un nouveau ticket a été créé dans le système.</p>
-          <p><strong>Email de l'utilisateur :</strong> ${req.user.email || 'Non renseigné'}</p>
-          <p>Vous pouvez accéder au ticket en cliquant sur le lien suivant :</p>
+          <h2>A new ticket has been created</h2>
+          <p>A new ticket has been created in the system.</p>
+          <p><strong>User Elmail :</strong> ${req.user.email || 'anonymous'}</p>
+          <p>You can access the ticket by clicking on the following link :</p>
           <a href="${ticketUrl}">Voir le ticket</a>
         `
     };
