@@ -467,7 +467,7 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       to: userEmail,
       subject: message ? 'Ticket Status Update' : 'Nouveau ticket créé',
       html: message
-        ? `<p>${message}</p><p>You can view your ticket <a href="${ticketUrl}">here</a>.</p>`
+        ? `<p>${message}</p>`
         : `
           <h2>Un nouveau ticket a été créé</h2>
           <p>Un nouveau ticket a été créé dans le système.</p>
