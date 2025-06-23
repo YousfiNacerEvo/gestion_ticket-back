@@ -100,7 +100,7 @@ app.post('/login', async (req, res) => {
 
 app.post('/tickets', authenticateToken, async (req, res) => {
   const { title, description, priority, type, status, client, station, clientPhone, clientEmail, files, waitingClient, resolutionComment } = req.body;
-  console.log("le backend host marche")
+  console.log("Backend host is working")
   try {
     const { data, error } = await supabase
       .from('tickets')
@@ -123,14 +123,14 @@ app.post('/tickets', authenticateToken, async (req, res) => {
       .select();
 
     if (error) {
-      console.error('Erreur Supabase:', error);
+      console.error('Supabase error:', error);
       return res.status(400).json({ error: error.message });
     }
 
     res.json(data);
   } catch (err) {
-    console.error('Erreur inattendue:', err);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('Unexpected error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -172,7 +172,7 @@ app.put('/tickets/:id', async (req, res) => {
   const { title, description, priority, type, status, client, station, clientPhone, clientEmail, files, waitingClient, resolutionComment } = req.body;
   
   try {
-    // Obtenir l'heure actuelle du serveur en UTC
+    // Get the current server time in UTC
     const serverTime = new Date();
     console.log('Server time:', serverTime.toISOString());
 
@@ -207,25 +207,25 @@ app.put('/tickets/:id', async (req, res) => {
     }
     res.json(data);
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du ticket:', error);
-    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du ticket' });
+    console.error('Error while updating the ticket:', error);
+    res.status(500).json({ error: 'Server error while updating the ticket' });
   }
 });
 
-// Route pour l'upload de fichiers
+// Route for file upload
 app.post('/tickets/upload', authenticateToken, upload.array('files', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'Aucun fichier n\'a été uploadé' });
+      return res.status(400).json({ error: 'No file was uploaded' });
     }
 
     const urls = req.files.map(file => `/uploads/${file.filename}`);
-    console.log('Fichiers uploadés:', urls);
+    console.log('Uploaded files:', urls);
 
     res.json({ urls });
   } catch (error) {
-    console.error('Erreur lors de l\'upload des fichiers:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'upload des fichiers' });
+    console.error('Error while uploading files:', error);
+    res.status(500).json({ error: 'Error while uploading files' });
   }
 });
 
@@ -551,7 +551,7 @@ app.post("/api/update-password", async (req, res) => {
   }
 });
 
-// Route pour récupérer les commentaires d'un ticket
+// Route to get ticket comments
 app.get('/tickets/:id/comments', async (req, res) => {
   const { id } = req.params;
   try {
@@ -564,14 +564,14 @@ app.get('/tickets/:id/comments', async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    console.error('Erreur lors de la récupération des commentaires:', error);
+    console.error('Error while retrieving comments:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Route pour ajouter un commentaire
+// Route to add a comment
 app.post('/tickets/:id/comments', authenticateToken, async (req, res) => {
-  console.log("commnetari arrvie cote server");
+  console.log("Comment received on server side");
 
   const { id } = req.params;
   const { content } = req.body;
@@ -589,12 +589,12 @@ app.post('/tickets/:id/comments', authenticateToken, async (req, res) => {
         created_at: new Date().toISOString()
       })
       .select();
-    console.log("commentaire modifier");
+    console.log("Comment updated");
 
     if (error) throw error;
     res.json(data[0]);
   } catch (error) {
-    console.error('Erreur lors de l\'ajout du commentaire:', error);
+    console.error('Error while adding comment:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -692,7 +692,7 @@ app.get('/api/reporting', async (req, res) => {
       timeSeries: groupTicketsByTime(ticketsWithResolution, groupBy)
     };
 
-    // Log des statistiques pour le débogage
+    // Log statistics for debugging
     console.log('Reporting Statistics:', {
       totalTickets: stats.total,
       resolvedTickets: stats.resolved,
@@ -705,7 +705,7 @@ app.get('/api/reporting', async (req, res) => {
       stats
     });
   } catch (error) {
-    console.error('Erreur lors de la génération du rapport:', error);
+    console.error('Error while generating report:', error);
     res.status(500).json({ error: error.message });
   }
 });
