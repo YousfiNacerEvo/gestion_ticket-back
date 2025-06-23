@@ -451,7 +451,7 @@ const transporter = nodemailer.createTransport({
 // Endpoint pour l'envoi d'email de notification de ticket
 app.post('/api/send-ticket', authenticateToken, async (req, res) => {
   try {
-    const { ticketId, userEmail } = req.body;
+    const { ticketId, userEmail, message } = req.body;
 
     if (!ticketId) {
       return res.status(400).json({
@@ -464,15 +464,17 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: 'naceryousfi007@gmail.com',
-      subject: 'Nouveau ticket créé',
-      html: `
-        <h2>Un nouveau ticket a été créé</h2>
-        <p>Un nouveau ticket a été créé dans le système.</p>
-        <p><strong>Email de l'utilisateur :</strong> ${req.user.email || 'Non renseigné'}</p>
-        <p>Vous pouvez accéder au ticket en cliquant sur le lien suivant :</p>
-        <a href="${ticketUrl}">Voir le ticket</a>
-      `
+      to: userEmail,
+      subject: message ? 'Ticket Status Update' : 'Nouveau ticket créé',
+      html: message
+        ? `<p>${message}</p><p>You can view your ticket <a href="${ticketUrl}">here</a>.</p>`
+        : `
+          <h2>Un nouveau ticket a été créé</h2>
+          <p>Un nouveau ticket a été créé dans le système.</p>
+          <p><strong>Email de l'utilisateur :</strong> ${req.user.email || 'Non renseigné'}</p>
+          <p>Vous pouvez accéder au ticket en cliquant sur le lien suivant :</p>
+          <a href="${ticketUrl}">Voir le ticket</a>
+        `
     };
 
     await transporter.sendMail(mailOptions);
