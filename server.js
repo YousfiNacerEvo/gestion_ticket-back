@@ -176,6 +176,17 @@ app.put('/tickets/:id', async (req, res) => {
     const serverTime = new Date();
     console.log('Server time:', serverTime.toISOString());
 
+    // Récupérer l'ancien statut du ticket
+    const { data: oldTicketData, error: oldTicketError } = await supabase
+      .from('tickets')
+      .select('status, client_email')
+      .eq('id', id)
+      .single();
+
+    if (oldTicketError) {
+      console.error('Error fetching old ticket data:', oldTicketError);
+    }
+
     const updateData = {
       title,
       description,
@@ -205,6 +216,62 @@ app.put('/tickets/:id', async (req, res) => {
       console.error('Supabase error:', error);
       return res.status(400).json({ error: error.message });
     }
+
+    // Si le statut a changé et qu'il y a un email client, envoyer un email de notification
+    if (oldTicketData && oldTicketData.status !== status && clientEmail) {
+      try {
+        // Fonction pour traduire le statut en anglais
+        const getStatusInEnglish = (status) => {
+          switch (status) {
+            case 'open': return 'Open';
+            case 'in_progress': return 'In Progress';
+            case 'closed': return 'Closed';
+            case 'waiting_client': return 'Waiting for Client';
+            default: return status;
+          }
+        };
+
+        const statusInEnglish = getStatusInEnglish(status);
+        
+        // Template d'email pour mise à jour de statut
+        const updateEmailTemplate = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Subject: ${title}</h2>
+            <p><strong>Priority:</strong> ${priority}</p>
+            <p><strong>Service:</strong> ${station}</p>
+            <p><strong>Ticket ID:</strong> ID_${id}</p>
+            <p><strong>Status Updated:</strong> ${statusInEnglish}</p>
+            <p><strong>Ticket has been updated</strong></p>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+            
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px;">
+              <p style="margin: 0; font-weight: bold;">*ASBU ,News and Programmes Exchange Center - Algiers</p>
+              <p style="margin: 5px 0;">: E-mail: support@asbumenos.net</p>
+              <p style="margin: 5px 0;">: Site web: www.asbu.net / www.asbucenter.dz</p>
+              <p style="margin: 5px 0;">**************************************************</p>
+              <p style="margin: 5px 0;">MENOS VoIP : 4001/ 4002</p>
+              <p style="margin: 5px 0;">HOTLINE:+213 20 40 68 20</p>
+              <p style="margin: 5px 0;">GSM NOC :+213 667 32 54 13</p>
+            </div>
+          </div>
+        `;
+
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: clientEmail,
+          subject: `Ticket (ID_${id}) - Status Updated to ${statusInEnglish}`,
+          html: updateEmailTemplate
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log('Status update email sent to client:', clientEmail);
+      } catch (emailError) {
+        console.error('Error sending status update email:', emailError);
+        // Ne pas faire échouer la mise à jour du ticket si l'email échoue
+      }
+    }
+
     res.json(data);
   } catch (error) {
     console.error('Error while updating the ticket:', error);
@@ -484,6 +551,7 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
         <p><strong>Service:</strong> ${ticketData.station}</p>
         <p><strong>Ticket ID:</strong> ID_${ticketId}</p>
         ${!isClientEmail ? `<p><strong>Click here to view the ticket:</strong> <a href="${ticketUrl}">ID_${ticketId}</a></p>` : ''}
+        ${!isClientEmail ? `<p><strong>Ticket created by:</strong> ${ticketData.user_email}</p>` : ''}
         
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
         
@@ -502,7 +570,7 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: userEmail,
-      subject: subject || `ID_${ticketId}`,
+      subject: subject || `Ticket (ID_${ticketId}) - New ticket created`,
       html: message ? `<p>${message}</p>` : emailTemplate
     };
 
