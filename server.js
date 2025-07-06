@@ -481,7 +481,7 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Subject: ${ticketData.title}</h2>
         <p><strong>Priority:</strong> ${ticketData.priority}</p>
-        <p><strong>Service:</strong> ${ticketData.type}</p>
+        <p><strong>Service:</strong> ${ticketData.station}</p>
         <p><strong>Ticket ID:</strong> ID_${ticketId}</p>
         ${!isClientEmail ? `<p><strong>Click here to view the ticket:</strong> <a href="${ticketUrl}">ID_${ticketId}</a></p>` : ''}
         
