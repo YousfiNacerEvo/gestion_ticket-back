@@ -496,6 +496,9 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true });
 
+    // Correction : définir ticketUrl avant de l'utiliser dans le template
+    const ticketUrl = `https://tickets-manager-kappa.vercel.app/dashboard/tickets/${ticketId}`;
+
     let commentsHtml = '';
     if (comments && comments.length > 0) {
       commentsHtml = `<div style="margin-top:30px;">
