@@ -548,10 +548,34 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       </div>
     `;
 
+    // Déterminer le statut en anglais pour l'objet de l'email
+    const getStatusInEnglish = (status) => {
+      switch (status) {
+        case 'open': return 'Open';
+        case 'in_progress': return 'In Progress';
+        case 'closed': return 'Closed';
+        case 'waiting_client': return 'Waiting for Client';
+        default: return status;
+      }
+    };
+    const statusInEnglish = getStatusInEnglish(ticketData.status);
+
+    // Générer l'objet dynamiquement selon le contexte
+    let subjectToSend = subject;
+    if (!subjectToSend) {
+      if (isClientEmail && isUpdate) {
+        subjectToSend = `Ticket (ID_${ticketId}) - Status updated to ${statusInEnglish}`;
+      } else if (isUpdate) {
+        subjectToSend = `Ticket (ID_${ticketId}) - Ticket updated`;
+      } else {
+        subjectToSend = `Ticket (ID_${ticketId}) - New ticket created`;
+      }
+    }
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: userEmail,
-      subject: subject || (isUpdate ? `Ticket (ID_${ticketId}) - Ticket updated` : `Ticket (ID_${ticketId}) - New ticket created`),
+      subject: subjectToSend,
       html: message ? `<p>${message}</p>` : emailTemplate
     };
 
