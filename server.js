@@ -9,6 +9,10 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
+const { Resend } = require('resend');
+
+// Initialize Resend (HTTP email API - works on Render.com)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const pool = new Pool({
   connectionString: 'postgresql://postgres:<PASSWORD>@<HOST>:5432/postgres',
@@ -474,29 +478,36 @@ app.get('/stats/incidents-by-status', async (req, res) => {
   }
 });
 
-// Configuration du transporteur email (SMTP explicite avec pool et timeouts)
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: Number(process.env.EMAIL_PORT) || 465,
-  secure: String(process.env.EMAIL_SECURE || 'true') === 'true',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  },
-  pool: true,
-  maxConnections: 3,
-  maxMessages: 100,
-  connectionTimeout: 20000,
-  socketTimeout: 20000,
-  greetingTimeout: 10000
-});
+// Configuration du transporteur email (SMTP - fallback only, Render blocks SMTP ports)
+let transporter = null;
+if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD && !resend) {
+  transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: Number(process.env.EMAIL_PORT) || 465,
+    secure: String(process.env.EMAIL_SECURE || 'true') === 'true',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    },
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
+    connectionTimeout: 10000,
+    socketTimeout: 10000,
+    greetingTimeout: 5000
+  });
+  transporter.verify().then(() => {
+    console.log('SMTP transporter ready');
+  }).catch((err) => {
+    console.warn('SMTP transporter verify failed (Render blocks SMTP):', err?.code || err?.message || err);
+  });
+}
 
-// Essai de vérification de la connexion SMTP au démarrage
-transporter.verify().then(() => {
-  console.log('SMTP transporter ready');
-}).catch((err) => {
-  console.warn('SMTP transporter verify failed:', err?.code || err?.message || err);
-});
+if (resend) {
+  console.log('Resend API configured (HTTP email delivery)');
+} else if (!transporter) {
+  console.warn('No email service configured. Set RESEND_API_KEY or EMAIL_USER/EMAIL_PASSWORD');
+}
 
 // Endpoint pour l'envoi d'email de notification de ticket
 app.post('/api/send-ticket', authenticateToken, async (req, res) => {
@@ -614,42 +625,51 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       html: message ? `<p>${message}</p>` : emailTemplate
     };
 
-    try {
-      await transporter.sendMail(mailOptions);
-      return res.json({
-        success: true,
-        message: 'Email envoyé avec succès'
-      });
-    } catch (smtpError) {
-      console.error('Erreur SMTP, tentative de fallback HTTP:', smtpError?.code || smtpError?.message || smtpError);
-      // Fallback via API HTTP (Resend) si disponible pour contourner les blocages SMTP
-      const resendKey = process.env.RESEND_API_KEY;
-      if (resendKey) {
-        try {
-          const resp = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${resendKey}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-              to: userEmail,
-              subject: subjectToSend,
-              html: message ? `<p>${message}</p>` : emailTemplate
-            })
-          });
-          if (!resp.ok) {
-            const body = await resp.text().catch(() => '');
-            throw new Error(`Resend API error: ${resp.status} ${resp.statusText} ${body}`);
-          }
-          return res.json({ success: true, message: 'Email envoyé via fallback API' });
-        } catch (fallbackErr) {
-          console.error('Fallback API failure:', fallbackErr?.message || fallbackErr);
-          // Continue vers le handler d'erreur principal ci-dessous
-        }
+    // Use Resend (HTTP API) if available, otherwise fallback to SMTP
+    if (resend) {
+      try {
+        const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+        const emailData = {
+          from: fromEmail,
+          to: [userEmail],
+          subject: subjectToSend,
+          html: message ? `<p>${message}</p>` : emailTemplate
+        };
+        const result = await resend.emails.send(emailData);
+        console.log('Email sent via Resend:', result);
+        return res.json({
+          success: true,
+          message: 'Email envoyé avec succès (Resend)'
+        });
+      } catch (resendError) {
+        console.error('Erreur Resend:', resendError?.message || resendError);
+        return res.status(500).json({
+          success: false,
+          message: 'Erreur lors de l\'envoi de l\'email via Resend',
+          error: resendError?.message || 'Unknown error'
+        });
       }
-      throw smtpError;
+    } else if (transporter) {
+      try {
+        await transporter.sendMail(mailOptions);
+        return res.json({
+          success: true,
+          message: 'Email envoyé avec succès (SMTP)'
+        });
+      } catch (smtpError) {
+        console.error('Erreur SMTP:', smtpError?.code || smtpError?.message || smtpError);
+        return res.status(500).json({
+          success: false,
+          message: 'Erreur lors de l\'envoi de l\'email via SMTP',
+          error: smtpError?.message || 'Connection timeout'
+        });
+      }
+    } else {
+      console.error('No email service configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Service d\'email non configuré'
+      });
     }
   } catch (error) {
     console.error('Erreur lors de l\'envoi de l\'email:', error);
