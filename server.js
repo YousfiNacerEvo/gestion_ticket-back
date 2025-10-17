@@ -483,7 +483,7 @@ app.get('/stats/incidents-by-status', async (req, res) => {
 
 // Configuration du transporteur email (SMTP - fallback only, Render blocks SMTP ports)
 let transporter = null;
-if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD && !resend) {
+if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD && !sendgrid) {
   transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: Number(process.env.EMAIL_PORT) || 465,
