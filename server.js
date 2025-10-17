@@ -9,10 +9,13 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
-const { Resend } = require('resend');
+const sgMail = require('@sendgrid/mail');
 
-// Initialize Resend (HTTP email API - works on Render.com)
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// Initialize SendGrid (HTTP email API - works on Render.com)
+const sendgrid = process.env.SENDGRID_API_KEY ? (() => {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  return sgMail;
+})() : null;
 
 const pool = new Pool({
   connectionString: 'postgresql://postgres:<PASSWORD>@<HOST>:5432/postgres',
@@ -503,10 +506,10 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD && !resend) {
   });
 }
 
-if (resend) {
-  console.log('Resend API configured (HTTP email delivery)');
+if (sendgrid) {
+  console.log('SendGrid API configured (HTTP email delivery)');
 } else if (!transporter) {
-  console.warn('No email service configured. Set RESEND_API_KEY or EMAIL_USER/EMAIL_PASSWORD');
+  console.warn('No email service configured. Set SENDGRID_API_KEY or EMAIL_USER/EMAIL_PASSWORD');
 }
 
 // Endpoint pour l'envoi d'email de notification de ticket
@@ -625,28 +628,30 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       html: message ? `<p>${message}</p>` : emailTemplate
     };
 
-    // Use Resend (HTTP API) if available, otherwise fallback to SMTP
-    if (resend) {
+    // Use SendGrid (HTTP API) if available, otherwise fallback to SMTP
+    if (sendgrid) {
       try {
-        const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+        const fromEmail = process.env.EMAIL_FROM || 'support@asbumenos.net';
         const emailData = {
           from: fromEmail,
-          to: [userEmail],
+          to: userEmail,
           subject: subjectToSend,
           html: message ? `<p>${message}</p>` : emailTemplate
         };
-        const result = await resend.emails.send(emailData);
-        console.log('Email sent via Resend:', result);
+        const result = await sendgrid.send(emailData);
+        console.log('Email sent via SendGrid');
         return res.json({
           success: true,
-          message: 'Email envoyé avec succès (Resend)'
+          message: 'Email envoyé avec succès (SendGrid)'
         });
-      } catch (resendError) {
-        console.error('Erreur Resend:', resendError?.message || resendError);
+      } catch (sendgridError) {
+        console.error('Erreur SendGrid:', sendgridError?.message || sendgridError);
+        const errorDetails = sendgridError?.response?.body || sendgridError;
+        console.error('SendGrid error details:', JSON.stringify(errorDetails, null, 2));
         return res.status(500).json({
           success: false,
-          message: 'Erreur lors de l\'envoi de l\'email via Resend',
-          error: resendError?.message || 'Unknown error'
+          message: 'Erreur lors de l\'envoi de l\'email via SendGrid',
+          error: sendgridError?.message || 'Unknown error'
         });
       }
     } else if (transporter) {
