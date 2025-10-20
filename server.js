@@ -478,31 +478,61 @@ app.get('/stats/incidents-by-status', async (req, res) => {
 let transporter = null;
 
 if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-  transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: String(process.env.EMAIL_SECURE || 'false') === 'true', // true pour port 465, false pour autres ports
+  const emailPort = Number(process.env.EMAIL_PORT) || 2525;
+  const emailHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const isSecure = String(process.env.EMAIL_SECURE || 'false') === 'true';
+  
+  console.log('🔧 Configuration SMTP:');
+  console.log(`   Host: ${emailHost}`);
+  console.log(`   Port: ${emailPort}`);
+  console.log(`   Secure: ${isSecure}`);
+  console.log(`   User: ${process.env.EMAIL_USER}`);
+
+  // Configuration avec options supplémentaires pour éviter les timeouts
+  const transportConfig = {
+    host: emailHost,
+    port: emailPort,
+    secure: isSecure,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
     },
+    // Options pour améliorer la compatibilité
+    tls: {
+      rejectUnauthorized: false, // Accepter les certificats auto-signés (dev only)
+      minVersion: 'TLSv1.2'
+    },
+    // Timeouts plus longs
+    connectionTimeout: 30000, // 30 secondes
+    socketTimeout: 30000,
+    greetingTimeout: 30000,
+    // Pool settings
     pool: true,
     maxConnections: 5,
-    maxMessages: 100,
-    connectionTimeout: 10000,
-    socketTimeout: 10000,
-    greetingTimeout: 5000
-  });
+    maxMessages: 100
+  };
 
-  // Vérifier la connexion au démarrage
+  transporter = nodemailer.createTransport(transportConfig);
+
+  // Vérifier la connexion au démarrage (ne bloque pas le serveur)
   transporter.verify()
     .then(() => {
       console.log('✅ Nodemailer SMTP server ready to send emails');
-      console.log(`📧 Using: ${process.env.EMAIL_HOST || 'smtp.gmail.com'}:${process.env.EMAIL_PORT || 587}`);
+      console.log(`📧 Successfully connected to ${emailHost}:${emailPort}`);
     })
     .catch((err) => {
-      console.error('❌ SMTP connection failed:', err?.code || err?.message || err);
-      console.error('Please check your EMAIL_USER, EMAIL_PASSWORD, and EMAIL_HOST settings');
+      console.error('❌ SMTP connection failed:', err?.code || err?.message);
+      console.error('📝 Détails de l\'erreur:', err);
+      console.error('');
+      console.error('💡 Solutions possibles:');
+      console.error('   1. Vérifiez que EMAIL_USER et EMAIL_PASSWORD sont corrects');
+      console.error('   2. Si vous utilisez Gmail, activez "Mots de passe d\'application"');
+      console.error('   3. Votre hébergeur bloque peut-être les ports SMTP (25, 465, 587)');
+      console.error('   4. Essayez un port alternatif (2525) ou un service SMTP différent');
+      console.error('   5. Pour Render.com/Heroku: utilisez un service HTTP comme SendGrid/Mailgun');
+      console.error('');
+      console.error('⚠️  Le serveur continuera sans email (fonctionnalité désactivée)');
+      transporter = null; // Désactiver le transporter si échec
     });
 } else {
   console.warn('⚠️  No email service configured. Set EMAIL_USER and EMAIL_PASSWORD in .env file');
