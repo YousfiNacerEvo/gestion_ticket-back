@@ -9,13 +9,6 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
-const sgMail = require('@sendgrid/mail');
-
-// Initialize SendGrid (HTTP email API - works on Render.com)
-const sendgrid = process.env.SENDGRID_API_KEY ? (() => {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  return sgMail;
-})() : null;
 
 const pool = new Pool({
   connectionString: 'postgresql://postgres:<PASSWORD>@<HOST>:5432/postgres',
@@ -481,35 +474,38 @@ app.get('/stats/incidents-by-status', async (req, res) => {
   }
 });
 
-// Configuration du transporteur email (SMTP - fallback only, Render blocks SMTP ports)
+// Configuration du transporteur email avec Nodemailer
 let transporter = null;
-if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD && !sendgrid) {
+
+if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
   transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT) || 465,
-    secure: String(process.env.EMAIL_SECURE || 'true') === 'true',
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: String(process.env.EMAIL_SECURE || 'false') === 'true', // true pour port 465, false pour autres ports
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
     },
     pool: true,
-    maxConnections: 3,
+    maxConnections: 5,
     maxMessages: 100,
     connectionTimeout: 10000,
     socketTimeout: 10000,
     greetingTimeout: 5000
   });
-  transporter.verify().then(() => {
-    console.log('SMTP transporter ready');
-  }).catch((err) => {
-    console.warn('SMTP transporter verify failed (Render blocks SMTP):', err?.code || err?.message || err);
-  });
-}
 
-if (sendgrid) {
-  console.log('SendGrid API configured (HTTP email delivery)');
-} else if (!transporter) {
-  console.warn('No email service configured. Set SENDGRID_API_KEY or EMAIL_USER/EMAIL_PASSWORD');
+  // Vérifier la connexion au démarrage
+  transporter.verify()
+    .then(() => {
+      console.log('✅ Nodemailer SMTP server ready to send emails');
+      console.log(`📧 Using: ${process.env.EMAIL_HOST || 'smtp.gmail.com'}:${process.env.EMAIL_PORT || 587}`);
+    })
+    .catch((err) => {
+      console.error('❌ SMTP connection failed:', err?.code || err?.message || err);
+      console.error('Please check your EMAIL_USER, EMAIL_PASSWORD, and EMAIL_HOST settings');
+    });
+} else {
+  console.warn('⚠️  No email service configured. Set EMAIL_USER and EMAIL_PASSWORD in .env file');
 }
 
 // Endpoint pour l'envoi d'email de notification de ticket
@@ -621,59 +617,38 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       }
     }
 
+    // Vérifier que le transporteur est configuré
+    if (!transporter) {
+      console.error('Email service not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Service d\'email non configuré. Veuillez configurer EMAIL_USER et EMAIL_PASSWORD.'
+      });
+    }
+
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: userEmail,
       subject: subjectToSend,
       html: message ? `<p>${message}</p>` : emailTemplate
     };
 
-    // Use SendGrid (HTTP API) if available, otherwise fallback to SMTP
-    if (sendgrid) {
-      try {
-        const fromEmail = process.env.EMAIL_FROM || 'support@asbumenos.net';
-        const emailData = {
-          from: fromEmail,
-          to: userEmail,
-          subject: subjectToSend,
-          html: message ? `<p>${message}</p>` : emailTemplate
-        };
-        const result = await sendgrid.send(emailData);
-        console.log('Email sent via SendGrid');
-        return res.json({
-          success: true,
-          message: 'Email envoyé avec succès (SendGrid)'
-        });
-      } catch (sendgridError) {
-        console.error('Erreur SendGrid:', sendgridError?.message || sendgridError);
-        const errorDetails = sendgridError?.response?.body || sendgridError;
-        console.error('SendGrid error details:', JSON.stringify(errorDetails, null, 2));
-        return res.status(500).json({
-          success: false,
-          message: 'Erreur lors de l\'envoi de l\'email via SendGrid',
-          error: sendgridError?.message || 'Unknown error'
-        });
-      }
-    } else if (transporter) {
-      try {
-        await transporter.sendMail(mailOptions);
-        return res.json({
-          success: true,
-          message: 'Email envoyé avec succès (SMTP)'
-        });
-      } catch (smtpError) {
-        console.error('Erreur SMTP:', smtpError?.code || smtpError?.message || smtpError);
-        return res.status(500).json({
-          success: false,
-          message: 'Erreur lors de l\'envoi de l\'email via SMTP',
-          error: smtpError?.message || 'Connection timeout'
-        });
-      }
-    } else {
-      console.error('No email service configured');
+    // Envoyer l'email avec Nodemailer
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Email sent successfully via Nodemailer');
+      console.log('Message ID:', info.messageId);
+      return res.json({
+        success: true,
+        message: 'Email envoyé avec succès',
+        messageId: info.messageId
+      });
+    } catch (emailError) {
+      console.error('❌ Erreur lors de l\'envoi de l\'email:', emailError?.code || emailError?.message || emailError);
       return res.status(500).json({
         success: false,
-        message: 'Service d\'email non configuré'
+        message: 'Erreur lors de l\'envoi de l\'email',
+        error: emailError?.message || 'Connection error'
       });
     }
   } catch (error) {
