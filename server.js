@@ -5,7 +5,7 @@ const app = express();
 const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
 const path = require('path');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
@@ -474,68 +474,22 @@ app.get('/stats/incidents-by-status', async (req, res) => {
   }
 });
 
-// Configuration du transporteur email avec Nodemailer
-let transporter = null;
+// Configuration de SendGrid
+let sendgridConfigured = false;
 
-if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-  const emailPort = Number(process.env.EMAIL_PORT) || 2525;
-  const emailHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
-  const isSecure = String(process.env.EMAIL_SECURE || 'false') === 'true';
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  sendgridConfigured = true;
   
-  console.log('🔧 Configuration SMTP:');
-  console.log(`   Host: ${emailHost}`);
-  console.log(`   Port: ${emailPort}`);
-  console.log(`   Secure: ${isSecure}`);
-  console.log(`   User: ${process.env.EMAIL_USER}`);
-
-  // Configuration avec options supplémentaires pour éviter les timeouts
-  const transportConfig = {
-    host: emailHost,
-    port: emailPort,
-    secure: isSecure,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
-    },
-    // Options pour améliorer la compatibilité
-    tls: {
-      rejectUnauthorized: false, // Accepter les certificats auto-signés (dev only)
-      minVersion: 'TLSv1.2'
-    },
-    // Timeouts plus longs
-    connectionTimeout: 30000, // 30 secondes
-    socketTimeout: 30000,
-    greetingTimeout: 30000,
-    // Pool settings
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100
-  };
-
-  transporter = nodemailer.createTransport(transportConfig);
-
-  // Vérifier la connexion au démarrage (ne bloque pas le serveur)
-  transporter.verify()
-    .then(() => {
-      console.log('✅ Nodemailer SMTP server ready to send emails');
-      console.log(`📧 Successfully connected to ${emailHost}:${emailPort}`);
-    })
-    .catch((err) => {
-      console.error('❌ SMTP connection failed:', err?.code || err?.message);
-      console.error('📝 Détails de l\'erreur:', err);
-      console.error('');
-      console.error('💡 Solutions possibles:');
-      console.error('   1. Vérifiez que EMAIL_USER et EMAIL_PASSWORD sont corrects');
-      console.error('   2. Si vous utilisez Gmail, activez "Mots de passe d\'application"');
-      console.error('   3. Votre hébergeur bloque peut-être les ports SMTP (25, 465, 587)');
-      console.error('   4. Essayez un port alternatif (2525) ou un service SMTP différent');
-      console.error('   5. Pour Render.com/Heroku: utilisez un service HTTP comme SendGrid/Mailgun');
-      console.error('');
-      console.error('⚠️  Le serveur continuera sans email (fonctionnalité désactivée)');
-      transporter = null; // Désactiver le transporter si échec
-    });
+  console.log('✅ SendGrid configured successfully');
+  console.log(`📧 Emails will be sent from: ${process.env.SENDGRID_FROM_EMAIL || 'Not set - using default'}`);
 } else {
-  console.warn('⚠️  No email service configured. Set EMAIL_USER and EMAIL_PASSWORD in .env file');
+  console.warn('⚠️  No email service configured. Set SENDGRID_API_KEY in .env file');
+  console.warn('💡 To get your SendGrid API key:');
+  console.warn('   1. Sign up at https://sendgrid.com');
+  console.warn('   2. Go to Settings > API Keys');
+  console.warn('   3. Create a new API key with "Mail Send" permissions');
+  console.warn('   4. Add SENDGRID_API_KEY=your_key to your .env file');
 }
 
 // Endpoint pour l'envoi d'email de notification de ticket
@@ -647,38 +601,41 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
       }
     }
 
-    // Vérifier que le transporteur est configuré
-    if (!transporter) {
+    // Vérifier que SendGrid est configuré
+    if (!sendgridConfigured) {
       console.error('Email service not configured');
       return res.status(500).json({
         success: false,
-        message: 'Service d\'email non configuré. Veuillez configurer EMAIL_USER et EMAIL_PASSWORD.'
+        message: 'Service d\'email non configuré. Veuillez configurer SENDGRID_API_KEY.'
       });
     }
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      from: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@example.com',
       to: userEmail,
       subject: subjectToSend,
       html: message ? `<p>${message}</p>` : emailTemplate
     };
 
-    // Envoyer l'email avec Nodemailer
+    // Envoyer l'email avec SendGrid
     try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log('✅ Email sent successfully via Nodemailer');
-      console.log('Message ID:', info.messageId);
+      const response = await sgMail.send(mailOptions);
+      console.log('✅ Email sent successfully via SendGrid');
+      console.log('Status Code:', response[0].statusCode);
       return res.json({
         success: true,
         message: 'Email envoyé avec succès',
-        messageId: info.messageId
+        statusCode: response[0].statusCode
       });
     } catch (emailError) {
       console.error('❌ Erreur lors de l\'envoi de l\'email:', emailError?.code || emailError?.message || emailError);
+      if (emailError.response) {
+        console.error('SendGrid Error Details:', emailError.response.body);
+      }
       return res.status(500).json({
         success: false,
         message: 'Erreur lors de l\'envoi de l\'email',
-        error: emailError?.message || 'Connection error'
+        error: emailError?.message || 'SendGrid API error'
       });
     }
   } catch (error) {
