@@ -553,28 +553,76 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
 
     // Template d'email avec les informations demandées
     const emailTemplate = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Subject: ${ticketData.title}</h2>
-        <p><strong>Priority:</strong> ${ticketData.priority}</p>
-        <p><strong>Service:</strong> ${ticketData.station}</p>
-        <p><strong>Ticket ID:</strong> ID_${ticketId}</p>
-        ${isUpdate ? `<p><strong>Status:</strong> ${ticketData.status}</p>` : ''}
-        ${isUpdate ? `<p><strong>Ticket has been updated</strong></p>` : ''}
-        ${!isClientEmail ? `<p><strong>Click here to view the ticket:</strong> <a href="${ticketUrl}">ID_${ticketId}</a></p>` : ''}
-        ${!isClientEmail ? `<p><strong>Ticket created by:</strong> ${ticketData.user_email}</p>` : ''}
-        ${commentsHtml}
-        ${resolutionHtml}
-        <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
-        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px;">
-          <p style="margin: 0; font-weight: bold;">*ASBU ,News and Programmes Exchange Center - Algiers</p>
-          <p style="margin: 5px 0;">: E-mail: support@asbumenos.net</p>
-          <p style="margin: 5px 0;">: Site web: www.asbu.net / www.asbucenter.dz</p>
-          <p style="margin: 5px 0;">**************************************************</p>
-          <p style="margin: 5px 0;">MENOS VoIP : 4001/ 4002</p>
-          <p style="margin: 5px 0;">HOTLINE:+213 20 40 68 20</p>
-          <p style="margin: 5px 0;">GSM NOC :+213 667 32 54 13</p>
-        </div>
-      </div>
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Ticket Notification</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td align="center" style="padding: 20px 0;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">ASBU Support Ticket</h1>
+                  </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 30px;">
+                    <h2 style="color: #333; margin-top: 0; font-size: 20px;">📋 ${ticketData.title}</h2>
+                    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                      <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Ticket ID:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">ID_${ticketId}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Priority:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">${ticketData.priority}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Service:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">${ticketData.station}</td>
+                      </tr>
+                      ${isUpdate ? `<tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Status:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">${ticketData.status}</td>
+                      </tr>` : ''}
+                      ${!isClientEmail ? `<tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Created by:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">${ticketData.user_email}</td>
+                      </tr>` : ''}
+                    </table>
+                    ${isUpdate ? '<div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;"><strong>⚠️ Ticket has been updated</strong></div>' : ''}
+                    ${!isClientEmail ? `<div style="text-align: center; margin: 25px 0;">
+                      <a href="${ticketUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: bold;">View Ticket Details</a>
+                    </div>` : ''}
+                    ${commentsHtml}
+                    ${resolutionHtml}
+                  </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 3px solid #667eea;">
+                    <p style="margin: 5px 0; font-weight: bold; color: #333;">ASBU - News and Programmes Exchange Center</p>
+                    <p style="margin: 5px 0; color: #666;">Algiers, Algeria</p>
+                    <p style="margin: 5px 0; color: #666;">📧 Email: support@asbumenos.net</p>
+                    <p style="margin: 5px 0; color: #666;">🌐 Web: www.asbu.net | www.asbucenter.dz</p>
+                    <p style="margin: 15px 0 5px 0; color: #666;">📞 MENOS VoIP: 4001 / 4002</p>
+                    <p style="margin: 5px 0; color: #666;">📱 HOTLINE: +213 20 40 68 20</p>
+                    <p style="margin: 5px 0; color: #666;">📱 GSM NOC: +213 667 32 54 13</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
     `;
 
     // Déterminer le statut en anglais pour l'objet de l'email
@@ -593,11 +641,11 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
     let subjectToSend = subject;
     if (!subjectToSend) {
       if (isClientEmail && isUpdate) {
-        subjectToSend = `Ticket (ID_${ticketId}) - Status updated to ${statusInEnglish}`;
+        subjectToSend = `[ASBU Support] Ticket #${ticketId} - Status: ${statusInEnglish}`;
       } else if (isUpdate) {
-        subjectToSend = `Ticket (ID_${ticketId}) - Ticket updated`;
+        subjectToSend = `[ASBU Support] Ticket #${ticketId} Updated - ${ticketData.title}`;
       } else {
-        subjectToSend = `Ticket (ID_${ticketId}) - New ticket created`;
+        subjectToSend = `[ASBU Support] New Ticket #${ticketId} - ${ticketData.title}`;
       }
     }
 
@@ -611,10 +659,25 @@ app.post('/api/send-ticket', authenticateToken, async (req, res) => {
     }
 
     const mailOptions = {
-      from: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@example.com',
+      from: {
+        email: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@example.com',
+        name: 'ASBU Support Center'
+      },
       to: userEmail,
       subject: subjectToSend,
-      html: message ? `<p>${message}</p>` : emailTemplate
+      html: message ? `<p>${message}</p>` : emailTemplate,
+      // Headers pour améliorer la délivrabilité
+      headers: {
+        'X-Priority': '3',
+        'X-Mailer': 'ASBU Ticket System',
+      },
+      // Categories pour le tracking SendGrid
+      categories: ['ticket-notification'],
+      // Désactiver le tracking si souhaité
+      trackingSettings: {
+        clickTracking: { enable: false },
+        openTracking: { enable: false }
+      }
     };
 
     // Envoyer l'email avec SendGrid
